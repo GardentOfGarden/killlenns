@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eclipse Key Panel</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-key"></i>
+                    <h1>Eclipse Key Panel</h1>
+                </div>
+                <div class="stats" id="stats">
+                    <div class="stat-item">
+                        <span class="stat-number" id="stat-total">0</span>
+                        <span class="stat-label">Всего</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number active" id="stat-active">0</span>
+                        <span class="stat-label">Активные</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number banned" id="stat-banned">0</span>
+                        <span class="stat-label">Забанены</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number expired" id="stat-expired">0</span>
+                        <span class="stat-label">Истекли</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Key Generation Section -->
+            <section class="card">
+                <h2><i class="fas fa-plus-circle"></i> Создать ключ</h2>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="duration">Длительность</label>
+                        <select id="duration" class="form-select">
+                            <option value="1">1 день</option>
+                            <option value="7">7 дней</option>
+                            <option value="30">30 дней</option>
+                            <option value="365">1 год</option>
+                            <option value="custom">Произвольная</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="custom-days-container" style="display: none;">
+                        <label for="custom-days">Количество дней</label>
+                        <input type="number" id="custom-days" class="form-input" min="1" value="30">
+                    </div>
+                    <div class="form-group">
+                        <label for="key-note">Примечание (опционально)</label>
+                        <input type="text" id="key-note" class="form-input" placeholder="Описание ключа...">
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button id="gen" class="btn btn-primary">
+                        <i class="fas fa-bolt"></i> Сгенерировать ключ
+                    </button>
+                    <button id="refresh" class="btn btn-secondary">
+                        <i class="fas fa-sync-alt"></i> Обновить
+                    </button>
+                </div>
+            </section>
+
+            <!-- Generated Key Section -->
+            <section class="card" id="generated-key-section" style="display: none;">
+                <h2><i class="fas fa-key"></i> Сгенерированный ключ</h2>
+                <div class="key-display">
+                    <input id="last" readonly class="key-input">
+                    <button id="copy-key" class="btn btn-success">
+                        <i class="fas fa-copy"></i> Копировать
+                    </button>
+                </div>
+            </section>
+
+            <!-- Key Validation Section -->
+            <section class="card">
+                <h2><i class="fas fa-search"></i> Проверка ключа</h2>
+                <div class="validation-form">
+                    <input type="text" id="checkkey" class="form-input" placeholder="Введите ключ для проверки...">
+                    <button id="check" class="btn btn-info">
+                        <i class="fas fa-check-circle"></i> Проверить
+                    </button>
+                </div>
+                <pre id="checkres" class="validation-result"></pre>
+            </section>
+
+            <!-- Settings Section -->
+            <section class="card">
+                <h2><i class="fas fa-cog"></i> Настройки</h2>
+                <div class="form-group">
+                    <label for="key-format">Формат ключа</label>
+                    <input type="text" id="key-format" class="form-input" 
+                           placeholder="XXXX-XXXX-XXXX-XXXX" 
+                           pattern="[X-]+"
+                           title="Используйте X для случайных символов и - для разделителей">
+                    <small>X - случайный символ, - - разделитель</small>
+                </div>
+                <button id="save-settings" class="btn btn-warning">
+                    <i class="fas fa-save"></i> Сохранить настройки
+                </button>
+            </section>
+
+            <!-- Keys List Section -->
+            <section class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-list"></i> Список ключей</h2>
+                    <div class="filters">
+                        <select id="filter-status" class="form-select">
+                            <option value="all">Все ключи</option>
+                            <option value="active">Активные</option>
+                            <option value="expired">Истекшие</option>
+                            <option value="banned">Забаненные</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="ktable" class="keys-table">
+                        <thead>
+                            <tr>
+                                <th>Ключ</th>
+                                <th>Создан</th>
+                                <th>Истекает</th>
+                                <th>Осталось</th>
+                                <th>Статус</th>
+                                <th>Примечание</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal for Note Editing -->
+    <div id="note-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Редактировать примечание</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="edit-note-input" class="form-input" placeholder="Введите примечание...">
+                <input type="hidden" id="edit-note-key">
+            </div>
+            <div class="modal-footer">
+                <button id="save-note" class="btn btn-primary">Сохранить</button>
+                <button id="cancel-note" class="btn btn-secondary">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
