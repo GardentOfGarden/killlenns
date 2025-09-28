@@ -14,11 +14,20 @@ if (!fs.existsSync(DATA_FILE)) {
 
 const db = {
     read() { 
-        const data = fs.readFileSync(DATA_FILE);
-        return JSON.parse(data);
+        try {
+            const data = fs.readFileSync(DATA_FILE, 'utf8');
+            return JSON.parse(data);
+        } catch (error) {
+            console.error('Error reading database:', error);
+            return { apps: [], settings: {} };
+        }
     },
     write(data) { 
-        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+        try {
+            fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+        } catch (error) {
+            console.error('Error writing database:', error);
+        }
     }
 };
 
@@ -43,10 +52,6 @@ function nowSec() {
     return Math.floor(Date.now() / 1000); 
 }
 
-function formatDate(timestamp) {
-    return new Date(timestamp * 1000).toLocaleString('ru-RU');
-}
-
 const app = express();
 app.use(bodyParser.json());
 app.use(express.static('public'));
@@ -56,18 +61,22 @@ function validateApp(req, res, next) {
     const ownerId = req.headers['x-owner-id'];
     const secretKey = req.headers['x-secret-key'];
     
+    console.log('Validating app credentials:', { ownerId, secretKey: secretKey ? '***' : 'missing' });
+    
     if (!ownerId || !secretKey) {
+        console.log('Missing credentials');
         return res.status(401).json({ error: 'Missing app credentials' });
     }
     
     const data = db.read();
-    const app = data.apps.find(a => a.ownerId === ownerId && a.secretKey === secretKey);
+    const appData = data.apps.find(a => a.ownerId === ownerId && a.secretKey === secretKey);
     
-    if (!app) {
+    if (!appData) {
+        console.log('Invalid credentials for ownerId:', ownerId);
         return res.status(401).json({ error: 'Invalid app credentials' });
     }
     
-    req.app = app;
+    req.app = appData;
     next();
 }
 
@@ -79,6 +88,8 @@ app.get('/', (req, res) => {
 // API для управления приложениями
 app.post('/api/apps/create', (req, res) => {
     const { name } = req.body;
+    
+    console.log('Creating app with name:', name);
     
     if (!name || name.length < 2) {
         return res.json({ success: false, error: 'App name must be at least 2 characters' });
@@ -105,6 +116,8 @@ app.post('/api/apps/create', (req, res) => {
     
     data.apps.push(newApp);
     db.write(data);
+    
+    console.log('App created successfully:', { id: newApp.id, name: newApp.name });
     
     res.json({
         success: true,
@@ -152,6 +165,8 @@ app.post('/api/keys/generate', validateApp, (req, res) => {
     const { days, note } = req.body;
     const app = req.app;
     
+    console.log('Generating key for app:', app.name);
+    
     const duration = parseInt(days) || 1;
     if (duration < 1) {
         return res.json({ success: false, error: 'Invalid duration' });
@@ -186,6 +201,8 @@ app.post('/api/keys/generate', validateApp, (req, res) => {
     
     db.write(data);
     
+    console.log('Key generated successfully:', key);
+    
     res.json({
         success: true,
         key: keyRecord.key,
@@ -196,6 +213,8 @@ app.post('/api/keys/generate', validateApp, (req, res) => {
 
 app.post('/api/keys/validate', validateApp, (req, res) => {
     const { key, hwid } = req.body;
+    
+    console.log('Validating key:', { key, hwid, app: req.app.name });
     
     if (!key) {
         return res.json({ valid: false, reason: 'no_key' });
@@ -256,6 +275,8 @@ app.post('/api/keys/validate', validateApp, (req, res) => {
 app.post('/api/keys/ban', validateApp, (req, res) => {
     const { key, ban } = req.body;
     
+    console.log('Banning key:', { key, ban, app: req.app.name });
+    
     const data = db.read();
     const appIndex = data.apps.findIndex(a => a.id === req.app.id);
     
@@ -277,6 +298,8 @@ app.post('/api/keys/ban', validateApp, (req, res) => {
 
 app.delete('/api/keys/:key', validateApp, (req, res) => {
     const key = req.params.key;
+    
+    console.log('Deleting key:', { key, app: req.app.name });
     
     const data = db.read();
     const appIndex = data.apps.findIndex(a => a.id === req.app.id);
@@ -318,7 +341,7 @@ app.get('/api/stats', validateApp, (req, res) => {
     const app = data.apps.find(a => a.id === req.app.id);
     
     if (!app || !app.keys) {
-        return res.json({ total: 0, active: 0, banned: 0, expired: 0, used: 0 });
+        return res.json({ total: 0, active: 0, banned: 0, expired: 0, used: 0, hwidLocked: 0 });
     }
     
     const keys = app.keys;
