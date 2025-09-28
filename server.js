@@ -61,19 +61,19 @@ function validateApp(req, res, next) {
     const ownerId = req.headers['x-owner-id'];
     const secretKey = req.headers['x-secret-key'];
     
-    console.log('Validating app credentials:', { ownerId, secretKey: secretKey ? '***' : 'missing' });
+    console.log('🔐 Validating app credentials for ownerId:', ownerId);
     
     if (!ownerId || !secretKey) {
-        console.log('Missing credentials');
-        return res.status(401).json({ error: 'Missing app credentials' });
+        console.log('❌ Missing credentials');
+        return res.status(401).json({ success: false, error: 'Missing app credentials' });
     }
     
     const data = db.read();
     const appData = data.apps.find(a => a.ownerId === ownerId && a.secretKey === secretKey);
     
     if (!appData) {
-        console.log('Invalid credentials for ownerId:', ownerId);
-        return res.status(401).json({ error: 'Invalid app credentials' });
+        console.log('❌ Invalid credentials for ownerId:', ownerId);
+        return res.status(401).json({ success: false, error: 'Invalid app credentials' });
     }
     
     req.app = appData;
@@ -89,7 +89,7 @@ app.get('/', (req, res) => {
 app.post('/api/apps/create', (req, res) => {
     const { name } = req.body;
     
-    console.log('Creating app with name:', name);
+    console.log('📱 Creating app with name:', name);
     
     if (!name || name.length < 2) {
         return res.json({ success: false, error: 'App name must be at least 2 characters' });
@@ -117,7 +117,7 @@ app.post('/api/apps/create', (req, res) => {
     data.apps.push(newApp);
     db.write(data);
     
-    console.log('App created successfully:', { id: newApp.id, name: newApp.name });
+    console.log('✅ App created successfully:', { id: newApp.id, name: newApp.name });
     
     res.json({
         success: true,
@@ -137,6 +137,7 @@ app.get('/api/apps', (req, res) => {
         id: app.id,
         name: app.name,
         ownerId: app.ownerId,
+        secretKey: app.secretKey, // ✅ Теперь возвращаем секретный ключ всегда
         created: app.created,
         keyCount: app.keys ? app.keys.length : 0,
         activeKeys: app.keys ? app.keys.filter(k => !k.banned && k.expires > nowSec()).length : 0
@@ -165,7 +166,7 @@ app.post('/api/keys/generate', validateApp, (req, res) => {
     const { days, note } = req.body;
     const app = req.app;
     
-    console.log('Generating key for app:', app.name);
+    console.log('🔑 Generating key for app:', app.name);
     
     const duration = parseInt(days) || 1;
     if (duration < 1) {
@@ -201,7 +202,7 @@ app.post('/api/keys/generate', validateApp, (req, res) => {
     
     db.write(data);
     
-    console.log('Key generated successfully:', key);
+    console.log('✅ Key generated successfully:', key);
     
     res.json({
         success: true,
@@ -214,7 +215,7 @@ app.post('/api/keys/generate', validateApp, (req, res) => {
 app.post('/api/keys/validate', validateApp, (req, res) => {
     const { key, hwid } = req.body;
     
-    console.log('Validating key:', { key, hwid, app: req.app.name });
+    console.log('🔍 Validating key:', { key, hwid, app: req.app.name });
     
     if (!key) {
         return res.json({ valid: false, reason: 'no_key' });
@@ -275,7 +276,7 @@ app.post('/api/keys/validate', validateApp, (req, res) => {
 app.post('/api/keys/ban', validateApp, (req, res) => {
     const { key, ban } = req.body;
     
-    console.log('Banning key:', { key, ban, app: req.app.name });
+    console.log('🚫 Banning key:', { key, ban, app: req.app.name });
     
     const data = db.read();
     const appIndex = data.apps.findIndex(a => a.id === req.app.id);
@@ -299,7 +300,7 @@ app.post('/api/keys/ban', validateApp, (req, res) => {
 app.delete('/api/keys/:key', validateApp, (req, res) => {
     const key = req.params.key;
     
-    console.log('Deleting key:', { key, app: req.app.name });
+    console.log('🗑️ Deleting key:', { key, app: req.app.name });
     
     const data = db.read();
     const appIndex = data.apps.findIndex(a => a.id === req.app.id);
