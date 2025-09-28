@@ -18,7 +18,6 @@ const db = {
             const data = fs.readFileSync(DATA_FILE, 'utf8');
             return JSON.parse(data);
         } catch (error) {
-            console.error('Error reading database:', error);
             return { apps: [], settings: {} };
         }
     },
@@ -31,7 +30,6 @@ const db = {
     }
 };
 
-// Генерация ID и ключей
 function generateId() {
     return crypto.randomBytes(8).toString('hex').toUpperCase();
 }
@@ -56,15 +54,11 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-// Middleware для проверки приложения
 function validateApp(req, res, next) {
     const ownerId = req.headers['x-owner-id'];
     const secretKey = req.headers['x-secret-key'];
     
-    console.log('🔐 Validating app credentials for ownerId:', ownerId);
-    
     if (!ownerId || !secretKey) {
-        console.log('❌ Missing credentials');
         return res.status(401).json({ success: false, error: 'Missing app credentials' });
     }
     
@@ -72,7 +66,6 @@ function validateApp(req, res, next) {
     const appData = data.apps.find(a => a.ownerId === ownerId && a.secretKey === secretKey);
     
     if (!appData) {
-        console.log('❌ Invalid credentials for ownerId:', ownerId);
         return res.status(401).json({ success: false, error: 'Invalid app credentials' });
     }
     
@@ -80,16 +73,12 @@ function validateApp(req, res, next) {
     next();
 }
 
-// Web Interface
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// API для управления приложениями
 app.post('/api/apps/create', (req, res) => {
     const { name } = req.body;
-    
-    console.log('📱 Creating app with name:', name);
     
     if (!name || name.length < 2) {
         return res.json({ success: false, error: 'App name must be at least 2 characters' });
@@ -97,7 +86,6 @@ app.post('/api/apps/create', (req, res) => {
     
     const data = db.read();
     
-    // Проверяем уникальность имени
     if (data.apps.find(app => app.name.toLowerCase() === name.toLowerCase())) {
         return res.json({ success: false, error: 'App name already exists' });
     }
@@ -117,8 +105,6 @@ app.post('/api/apps/create', (req, res) => {
     data.apps.push(newApp);
     db.write(data);
     
-    console.log('✅ App created successfully:', { id: newApp.id, name: newApp.name });
-    
     res.json({
         success: true,
         app: {
@@ -137,7 +123,7 @@ app.get('/api/apps', (req, res) => {
         id: app.id,
         name: app.name,
         ownerId: app.ownerId,
-        secretKey: app.secretKey, // ✅ Теперь возвращаем секретный ключ всегда
+        secretKey: app.secretKey,
         created: app.created,
         keyCount: app.keys ? app.keys.length : 0,
         activeKeys: app.keys ? app.keys.filter(k => !k.banned && k.expires > nowSec()).length : 0
@@ -161,12 +147,9 @@ app.delete('/api/apps/:id', (req, res) => {
     res.json({ success: true });
 });
 
-// API для управления ключами (требует аутентификации приложения)
 app.post('/api/keys/generate', validateApp, (req, res) => {
     const { days, note } = req.body;
     const app = req.app;
-    
-    console.log('🔑 Generating key for app:', app.name);
     
     const duration = parseInt(days) || 1;
     if (duration < 1) {
@@ -196,13 +179,10 @@ app.post('/api/keys/generate', validateApp, (req, res) => {
         data.apps[appIndex].keys = [];
     }
     
-    // Удаляем старый ключ если существует
     data.apps[appIndex].keys = data.apps[appIndex].keys.filter(k => k.key !== key);
     data.apps[appIndex].keys.push(keyRecord);
     
     db.write(data);
-    
-    console.log('✅ Key generated successfully:', key);
     
     res.json({
         success: true,
@@ -214,8 +194,6 @@ app.post('/api/keys/generate', validateApp, (req, res) => {
 
 app.post('/api/keys/validate', validateApp, (req, res) => {
     const { key, hwid } = req.body;
-    
-    console.log('🔍 Validating key:', { key, hwid, app: req.app.name });
     
     if (!key) {
         return res.json({ valid: false, reason: 'no_key' });
@@ -246,12 +224,10 @@ app.post('/api/keys/validate', validateApp, (req, res) => {
         return res.json({ valid: false, reason: 'expired', expiredAt: keyRecord.expires });
     }
     
-    // Проверка HWID
     if (keyRecord.hwid && keyRecord.hwid !== hwid) {
         return res.json({ valid: false, reason: 'hwid_mismatch' });
     }
     
-    // Если HWID не установлен, привязываем его
     const appIndex = data.apps.findIndex(a => a.id === req.app.id);
     const keyIndex = data.apps[appIndex].keys.findIndex(k => k.key === key);
     
@@ -259,7 +235,6 @@ app.post('/api/keys/validate', validateApp, (req, res) => {
         data.apps[appIndex].keys[keyIndex].hwid = hwid;
     }
     
-    // Обновляем время последнего использования
     data.apps[appIndex].keys[keyIndex].lastUsed = nowSec();
     data.apps[appIndex].keys[keyIndex].used = true;
     
@@ -275,8 +250,6 @@ app.post('/api/keys/validate', validateApp, (req, res) => {
 
 app.post('/api/keys/ban', validateApp, (req, res) => {
     const { key, ban } = req.body;
-    
-    console.log('🚫 Banning key:', { key, ban, app: req.app.name });
     
     const data = db.read();
     const appIndex = data.apps.findIndex(a => a.id === req.app.id);
@@ -299,8 +272,6 @@ app.post('/api/keys/ban', validateApp, (req, res) => {
 
 app.delete('/api/keys/:key', validateApp, (req, res) => {
     const key = req.params.key;
-    
-    console.log('🗑️ Deleting key:', { key, app: req.app.name });
     
     const data = db.read();
     const appIndex = data.apps.findIndex(a => a.id === req.app.id);
@@ -375,6 +346,5 @@ function getRemainingTime(expires) {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log('🚀 Eclipse Key Panel запущен на порту', PORT);
-    console.log('📱 Система мульти-приложений с HWID активирована');
+    console.log('Eclipse Key Panel started on port', PORT);
 });
