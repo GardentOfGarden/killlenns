@@ -4,165 +4,353 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
 
-const DATA_FILE = path.join(__dirname,'data.json');
-if(!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE,JSON.stringify({keys:[],settings:{}},null,2));
+const DATA_FILE = path.join(__dirname, 'data.json');
+if (!fs.existsSync(DATA_FILE)) {
+    fs.writeFileSync(DATA_FILE, JSON.stringify({ 
+        apps: [],
+        settings: {} 
+    }, null, 2));
+}
+
 const db = {
-  read(){ return JSON.parse(fs.readFileSync(DATA_FILE)); },
-  write(data){ fs.writeFileSync(DATA_FILE,JSON.stringify(data,null,2)); }
+    read() { 
+        const data = fs.readFileSync(DATA_FILE);
+        return JSON.parse(data);
+    },
+    write(data) { 
+        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    }
 };
 
-function saveKeyRecord(rec){
-  const data = db.read();
-  data.keys = data.keys.filter(k=>k.key!==rec.key);
-  data.keys.push(rec);
-  db.write(data);
+// Генерация ID и ключей
+function generateId() {
+    return crypto.randomBytes(8).toString('hex').toUpperCase();
 }
 
-function genKey(format = 'XXXX-XXXX-XXXX-XXXX') {
-  const data = db.read();
-  const keyFormat = data.settings.keyFormat || format;
-  return keyFormat.replace(/X/g, () => crypto.randomBytes(1).toString('hex').toUpperCase().charAt(0));
+function generateSecretKey() {
+    return crypto.randomBytes(32).toString('hex').toUpperCase();
 }
 
-function nowSec(){ return Math.floor(Date.now()/1000); }
+function generateKey() {
+    const parts = [];
+    for (let i = 0; i < 4; i++) {
+        parts.push(crypto.randomBytes(3).toString('hex').toUpperCase());
+    }
+    return parts.join('-');
+}
+
+function nowSec() { 
+    return Math.floor(Date.now() / 1000); 
+}
 
 function formatDate(timestamp) {
-  return new Date(timestamp * 1000).toLocaleString('ru-RU');
-}
-
-function getRemainingTime(expires) {
-  const now = nowSec();
-  const diff = expires - now;
-  if (diff <= 0) return 'Истек';
-  
-  const days = Math.floor(diff / (24 * 3600));
-  const hours = Math.floor((diff % (24 * 3600)) / 3600);
-  
-  if (days > 0) return `${days}д ${hours}ч`;
-  return `${hours}ч`;
+    return new Date(timestamp * 1000).toLocaleString('ru-RU');
 }
 
 const app = express();
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-// Красивый HTML с современным дизайном
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// API endpoints
-app.post('/api/generate',(req,res)=>{
-  const days = parseInt(req.body?.days) || 1;
-  const note = req.body?.note || '';
-  const k = genKey();
-  const rec = {
-    key: k,
-    created: nowSec(),
-    expires: nowSec() + days * 24 * 3600,
-    banned: false,
-    note: note,
-    used: false
-  };
-  saveKeyRecord(rec);
-  res.json({ok:true, key:k, expires:rec.expires, note: rec.note});
-});
-
-app.post('/api/validate',(req,res)=>{
-  const key = (req.body?.key)||'';
-  const data = db.read();
-  const rec = data.keys.find(x=>x.key===key);
-  if(!rec) return res.json({valid:false,reason:'not_found'});
-  if(rec.banned) return res.json({valid:false,reason:'banned'});
-  if(rec.expires < nowSec()) return res.json({valid:false,reason:'expired',expiredAt:rec.expires});
-  
-  // Пометить ключ как использованный
-  if (!rec.used) {
-    rec.used = true;
-    rec.usedAt = nowSec();
-    const data = db.read();
-    const keyIndex = data.keys.findIndex(x => x.key === key);
-    if (keyIndex !== -1) {
-      data.keys[keyIndex] = rec;
-      db.write(data);
+// Middleware для проверки приложения
+function validateApp(req, res, next) {
+    const ownerId = req.headers['x-owner-id'];
+    const secretKey = req.headers['x-secret-key'];
+    
+    if (!ownerId || !secretKey) {
+        return res.status(401).json({ error: 'Missing app credentials' });
     }
-  }
-  
-  return res.json({valid:true, expires:rec.expires, created:rec.created});
+    
+    const data = db.read();
+    const app = data.apps.find(a => a.ownerId === ownerId && a.secretKey === secretKey);
+    
+    if (!app) {
+        return res.status(401).json({ error: 'Invalid app credentials' });
+    }
+    
+    req.app = app;
+    next();
+}
+
+// Web Interface
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.post('/api/ban',(req,res)=>{
-  const key = req.body?.key || '';
-  const ban = Boolean(req.body?.ban);
-  const data = db.read();
-  const rec = data.keys.find(x=>x.key===key);
-  if(!rec) return res.json({ok:false,reason:'not_found'});
-  rec.banned = ban;
-  db.write(data);
-  res.json({ok:true, key, ban});
+// API для управления приложениями
+app.post('/api/apps/create', (req, res) => {
+    const { name } = req.body;
+    
+    if (!name || name.length < 2) {
+        return res.json({ success: false, error: 'App name must be at least 2 characters' });
+    }
+    
+    const data = db.read();
+    
+    // Проверяем уникальность имени
+    if (data.apps.find(app => app.name.toLowerCase() === name.toLowerCase())) {
+        return res.json({ success: false, error: 'App name already exists' });
+    }
+    
+    const ownerId = generateId();
+    const secretKey = generateSecretKey();
+    
+    const newApp = {
+        id: generateId(),
+        name: name.trim(),
+        ownerId,
+        secretKey,
+        created: nowSec(),
+        keys: []
+    };
+    
+    data.apps.push(newApp);
+    db.write(data);
+    
+    res.json({
+        success: true,
+        app: {
+            id: newApp.id,
+            name: newApp.name,
+            ownerId: newApp.ownerId,
+            secretKey: newApp.secretKey,
+            created: newApp.created
+        }
+    });
 });
 
-app.post('/api/delete',(req,res)=>{
-  const key = req.body?.key || '';
-  const data = db.read();
-  const initialLength = data.keys.length;
-  data.keys = data.keys.filter(x=>x.key!==key);
-  db.write(data);
-  res.json({ok:true, deleted: initialLength !== data.keys.length});
+app.get('/api/apps', (req, res) => {
+    const data = db.read();
+    const apps = data.apps.map(app => ({
+        id: app.id,
+        name: app.name,
+        ownerId: app.ownerId,
+        created: app.created,
+        keyCount: app.keys ? app.keys.length : 0,
+        activeKeys: app.keys ? app.keys.filter(k => !k.banned && k.expires > nowSec()).length : 0
+    }));
+    
+    res.json({ success: true, apps });
 });
 
-app.post('/api/update-note',(req,res)=>{
-  const key = req.body?.key || '';
-  const note = req.body?.note || '';
-  const data = db.read();
-  const rec = data.keys.find(x=>x.key===key);
-  if(!rec) return res.json({ok:false,reason:'not_found'});
-  rec.note = note;
-  db.write(data);
-  res.json({ok:true});
+app.delete('/api/apps/:id', (req, res) => {
+    const appId = req.params.id;
+    const data = db.read();
+    
+    const initialLength = data.apps.length;
+    data.apps = data.apps.filter(app => app.id !== appId);
+    
+    if (data.apps.length === initialLength) {
+        return res.json({ success: false, error: 'App not found' });
+    }
+    
+    db.write(data);
+    res.json({ success: true });
 });
 
-app.post('/api/settings',(req,res)=>{
-  const settings = req.body?.settings;
-  if(!settings) return res.json({ok:false,reason:'no_settings'});
-  
-  const data = db.read();
-  data.settings = {...data.settings, ...settings};
-  db.write(data);
-  res.json({ok:true, settings: data.settings});
+// API для управления ключами (требует аутентификации приложения)
+app.post('/api/keys/generate', validateApp, (req, res) => {
+    const { days, note } = req.body;
+    const app = req.app;
+    
+    const duration = parseInt(days) || 1;
+    if (duration < 1) {
+        return res.json({ success: false, error: 'Invalid duration' });
+    }
+    
+    const key = generateKey();
+    const keyRecord = {
+        key,
+        created: nowSec(),
+        expires: nowSec() + duration * 24 * 3600,
+        banned: false,
+        note: note || '',
+        used: false,
+        hwid: null,
+        lastUsed: null
+    };
+    
+    const data = db.read();
+    const appIndex = data.apps.findIndex(a => a.id === app.id);
+    
+    if (appIndex === -1) {
+        return res.json({ success: false, error: 'App not found' });
+    }
+    
+    if (!data.apps[appIndex].keys) {
+        data.apps[appIndex].keys = [];
+    }
+    
+    // Удаляем старый ключ если существует
+    data.apps[appIndex].keys = data.apps[appIndex].keys.filter(k => k.key !== key);
+    data.apps[appIndex].keys.push(keyRecord);
+    
+    db.write(data);
+    
+    res.json({
+        success: true,
+        key: keyRecord.key,
+        expires: keyRecord.expires,
+        note: keyRecord.note
+    });
 });
 
-app.get('/api/settings',(req,res)=>{
-  const data = db.read();
-  res.json({ok:true, settings: data.settings});
+app.post('/api/keys/validate', validateApp, (req, res) => {
+    const { key, hwid } = req.body;
+    
+    if (!key) {
+        return res.json({ valid: false, reason: 'no_key' });
+    }
+    
+    if (!hwid) {
+        return res.json({ valid: false, reason: 'no_hwid' });
+    }
+    
+    const data = db.read();
+    const app = data.apps.find(a => a.id === req.app.id);
+    
+    if (!app || !app.keys) {
+        return res.json({ valid: false, reason: 'not_found' });
+    }
+    
+    const keyRecord = app.keys.find(k => k.key === key);
+    
+    if (!keyRecord) {
+        return res.json({ valid: false, reason: 'not_found' });
+    }
+    
+    if (keyRecord.banned) {
+        return res.json({ valid: false, reason: 'banned' });
+    }
+    
+    if (keyRecord.expires < nowSec()) {
+        return res.json({ valid: false, reason: 'expired', expiredAt: keyRecord.expires });
+    }
+    
+    // Проверка HWID
+    if (keyRecord.hwid && keyRecord.hwid !== hwid) {
+        return res.json({ valid: false, reason: 'hwid_mismatch' });
+    }
+    
+    // Если HWID не установлен, привязываем его
+    const appIndex = data.apps.findIndex(a => a.id === req.app.id);
+    const keyIndex = data.apps[appIndex].keys.findIndex(k => k.key === key);
+    
+    if (!keyRecord.hwid) {
+        data.apps[appIndex].keys[keyIndex].hwid = hwid;
+    }
+    
+    // Обновляем время последнего использования
+    data.apps[appIndex].keys[keyIndex].lastUsed = nowSec();
+    data.apps[appIndex].keys[keyIndex].used = true;
+    
+    db.write(data);
+    
+    res.json({
+        valid: true,
+        expires: keyRecord.expires,
+        created: keyRecord.created,
+        hwid: keyRecord.hwid || hwid
+    });
 });
 
-app.get('/api/stats',(req,res)=>{
-  const data = db.read();
-  const keys = data.keys;
-  const total = keys.length;
-  const active = keys.filter(k => !k.banned && k.expires > nowSec()).length;
-  const banned = keys.filter(k => k.banned).length;
-  const expired = keys.filter(k => k.expires <= nowSec() && !k.banned).length;
-  const used = keys.filter(k => k.used).length;
-  
-  res.json({
-    total, active, banned, expired, used
-  });
+app.post('/api/keys/ban', validateApp, (req, res) => {
+    const { key, ban } = req.body;
+    
+    const data = db.read();
+    const appIndex = data.apps.findIndex(a => a.id === req.app.id);
+    
+    if (appIndex === -1) {
+        return res.json({ success: false, error: 'App not found' });
+    }
+    
+    const keyIndex = data.apps[appIndex].keys.findIndex(k => k.key === key);
+    
+    if (keyIndex === -1) {
+        return res.json({ success: false, error: 'Key not found' });
+    }
+    
+    data.apps[appIndex].keys[keyIndex].banned = Boolean(ban);
+    db.write(data);
+    
+    res.json({ success: true, banned: Boolean(ban) });
 });
 
-app.get('/api/list',(req,res)=>{
-  const data = db.read();
-  const keysWithStatus = data.keys.map(k => ({
-    ...k,
-    status: k.banned ? 'banned' : (k.expires <= nowSec() ? 'expired' : 'active'),
-    remaining: getRemainingTime(k.expires)
-  }));
-  res.json({keys: keysWithStatus});
+app.delete('/api/keys/:key', validateApp, (req, res) => {
+    const key = req.params.key;
+    
+    const data = db.read();
+    const appIndex = data.apps.findIndex(a => a.id === req.app.id);
+    
+    if (appIndex === -1) {
+        return res.json({ success: false, error: 'App not found' });
+    }
+    
+    const initialLength = data.apps[appIndex].keys.length;
+    data.apps[appIndex].keys = data.apps[appIndex].keys.filter(k => k.key !== key);
+    
+    db.write(data);
+    
+    res.json({ 
+        success: true, 
+        deleted: initialLength !== data.apps[appIndex].keys.length 
+    });
 });
+
+app.get('/api/keys', validateApp, (req, res) => {
+    const data = db.read();
+    const app = data.apps.find(a => a.id === req.app.id);
+    
+    if (!app || !app.keys) {
+        return res.json({ success: true, keys: [] });
+    }
+    
+    const keysWithStatus = app.keys.map(k => ({
+        ...k,
+        status: k.banned ? 'banned' : (k.expires <= nowSec() ? 'expired' : 'active'),
+        remaining: getRemainingTime(k.expires)
+    }));
+    
+    res.json({ success: true, keys: keysWithStatus });
+});
+
+app.get('/api/stats', validateApp, (req, res) => {
+    const data = db.read();
+    const app = data.apps.find(a => a.id === req.app.id);
+    
+    if (!app || !app.keys) {
+        return res.json({ total: 0, active: 0, banned: 0, expired: 0, used: 0 });
+    }
+    
+    const keys = app.keys;
+    const now = nowSec();
+    
+    const stats = {
+        total: keys.length,
+        active: keys.filter(k => !k.banned && k.expires > now).length,
+        banned: keys.filter(k => k.banned).length,
+        expired: keys.filter(k => k.expires <= now && !k.banned).length,
+        used: keys.filter(k => k.used).length,
+        hwidLocked: keys.filter(k => k.hwid).length
+    };
+    
+    res.json(stats);
+});
+
+function getRemainingTime(expires) {
+    const now = nowSec();
+    const diff = expires - now;
+    
+    if (diff <= 0) return 'Expired';
+    
+    const days = Math.floor(diff / (24 * 3600));
+    const hours = Math.floor((diff % (24 * 3600)) / 3600);
+    
+    if (days > 0) return `${days}d ${hours}h`;
+    return `${hours}h`;
+}
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT,()=>{
-  console.log('🚀 Eclipse Key Panel запущен на порту', PORT);
-  console.log('📊 Статистика доступна по адресу: http://localhost:' + PORT);
+app.listen(PORT, () => {
+    console.log('🚀 Eclipse Key Panel запущен на порту', PORT);
+    console.log('📱 Система мульти-приложений с HWID активирована');
 });
