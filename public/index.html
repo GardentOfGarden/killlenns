@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eclipse Key Panel</title>
+    <title>Eclipse - Multi-App Key System</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -13,151 +13,289 @@
         <header class="header">
             <div class="header-content">
                 <div class="logo">
-                    <i class="fas fa-key"></i>
-                    <h1>Eclipse Key Panel</h1>
-                </div>
-                <div class="stats" id="stats">
-                    <div class="stat-item">
-                        <span class="stat-number" id="stat-total">0</span>
-                        <span class="stat-label">Всего</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-number active" id="stat-active">0</span>
-                        <span class="stat-label">Активные</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-number banned" id="stat-banned">0</span>
-                        <span class="stat-label">Забанены</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-number expired" id="stat-expired">0</span>
-                        <span class="stat-label">Истекли</span>
+                    <i class="fas fa-shield-alt"></i>
+                    <div>
+                        <h1>Eclipse</h1>
+                        <p>Multi-App Key Management System</p>
                     </div>
                 </div>
+                <nav class="nav">
+                    <button class="nav-btn active" data-tab="apps">Приложения</button>
+                    <button class="nav-btn" data-tab="keys">Ключи</button>
+                    <button class="nav-btn" data-tab="validation">Проверка</button>
+                </nav>
             </div>
         </header>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Key Generation Section -->
-            <section class="card">
-                <h2><i class="fas fa-plus-circle"></i> Создать ключ</h2>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="duration">Длительность</label>
-                        <select id="duration" class="form-select">
-                            <option value="1">1 день</option>
-                            <option value="7">7 дней</option>
-                            <option value="30">30 дней</option>
-                            <option value="365">1 год</option>
-                            <option value="custom">Произвольная</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="custom-days-container" style="display: none;">
-                        <label for="custom-days">Количество дней</label>
-                        <input type="number" id="custom-days" class="form-input" min="1" value="30">
-                    </div>
-                    <div class="form-group">
-                        <label for="key-note">Примечание (опционально)</label>
-                        <input type="text" id="key-note" class="form-input" placeholder="Описание ключа...">
-                    </div>
-                </div>
-                <div class="button-group">
-                    <button id="gen" class="btn btn-primary">
-                        <i class="fas fa-bolt"></i> Сгенерировать ключ
-                    </button>
-                    <button id="refresh" class="btn btn-secondary">
-                        <i class="fas fa-sync-alt"></i> Обновить
-                    </button>
-                </div>
-            </section>
-
-            <!-- Generated Key Section -->
-            <section class="card" id="generated-key-section" style="display: none;">
-                <h2><i class="fas fa-key"></i> Сгенерированный ключ</h2>
-                <div class="key-display">
-                    <input id="last" readonly class="key-input">
-                    <button id="copy-key" class="btn btn-success">
-                        <i class="fas fa-copy"></i> Копировать
-                    </button>
-                </div>
-            </section>
-
-            <!-- Key Validation Section -->
-            <section class="card">
-                <h2><i class="fas fa-search"></i> Проверка ключа</h2>
-                <div class="validation-form">
-                    <input type="text" id="checkkey" class="form-input" placeholder="Введите ключ для проверки...">
-                    <button id="check" class="btn btn-info">
-                        <i class="fas fa-check-circle"></i> Проверить
-                    </button>
-                </div>
-                <pre id="checkres" class="validation-result"></pre>
-            </section>
-
-            <!-- Settings Section -->
-            <section class="card">
-                <h2><i class="fas fa-cog"></i> Настройки</h2>
+        <!-- Apps Tab -->
+        <div class="tab-content active" id="apps-tab">
+            <div class="card">
+                <h2><i class="fas fa-plus"></i> Создать приложение</h2>
                 <div class="form-group">
-                    <label for="key-format">Формат ключа</label>
-                    <input type="text" id="key-format" class="form-input" 
-                           placeholder="XXXX-XXXX-XXXX-XXXX" 
-                           pattern="[X-]+"
-                           title="Используйте X для случайных символов и - для разделителей">
-                    <small>X - случайный символ, - - разделитель</small>
+                    <label for="app-name">Название приложения</label>
+                    <input type="text" id="app-name" class="form-input" placeholder="Введите название...">
                 </div>
-                <button id="save-settings" class="btn btn-warning">
-                    <i class="fas fa-save"></i> Сохранить настройки
+                <button id="create-app" class="btn btn-primary">
+                    <i class="fas fa-rocket"></i> Создать приложение
                 </button>
-            </section>
+            </div>
 
-            <!-- Keys List Section -->
-            <section class="card">
-                <div class="card-header">
-                    <h2><i class="fas fa-list"></i> Список ключей</h2>
-                    <div class="filters">
-                        <select id="filter-status" class="form-select">
-                            <option value="all">Все ключи</option>
-                            <option value="active">Активные</option>
-                            <option value="expired">Истекшие</option>
-                            <option value="banned">Забаненные</option>
-                        </select>
+            <div class="card" id="app-credentials" style="display: none;">
+                <h2><i class="fas fa-key"></i> Данные приложения</h2>
+                <div class="credentials">
+                    <div class="credential-item">
+                        <label>Owner ID:</label>
+                        <div class="credential-value">
+                            <code id="new-owner-id"></code>
+                            <button class="btn btn-sm copy-btn" data-target="new-owner-id">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="credential-item">
+                        <label>Secret Key:</label>
+                        <div class="credential-value">
+                            <code id="new-secret-key"></code>
+                            <button class="btn btn-sm copy-btn" data-target="new-secret-key">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Сохраните эти данные! Secret Key покажется только один раз.
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-th-list"></i> Мои приложения</h2>
                 <div class="table-container">
-                    <table id="ktable" class="keys-table">
+                    <table class="apps-table">
                         <thead>
                             <tr>
-                                <th>Ключ</th>
-                                <th>Создан</th>
-                                <th>Истекает</th>
-                                <th>Осталось</th>
-                                <th>Статус</th>
-                                <th>Примечание</th>
+                                <th>Название</th>
+                                <th>Owner ID</th>
+                                <th>Ключи</th>
+                                <th>Создано</th>
                                 <th>Действия</th>
                             </tr>
                         </thead>
-                        <tbody></tbody>
+                        <tbody id="apps-list"></tbody>
                     </table>
                 </div>
-            </section>
-        </main>
+            </div>
+        </div>
+
+        <!-- Keys Tab -->
+        <div class="tab-content" id="keys-tab">
+            <div class="card">
+                <h2><i class="fas fa-cog"></i> Управление приложением</h2>
+                <div class="form-group">
+                    <label>Выберите приложение</label>
+                    <select id="app-select" class="form-select">
+                        <option value="">-- Выберите приложение --</option>
+                    </select>
+                </div>
+                
+                <div id="app-credentials-display" style="display: none;">
+                    <div class="credentials-inline">
+                        <div class="credential-item">
+                            <label>Owner ID:</label>
+                            <code id="current-owner-id"></code>
+                        </div>
+                        <div class="credential-item">
+                            <label>Secret Key:</label>
+                            <code id="current-secret-key"></code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="app-actions" style="display: none;" id="app-actions">
+                <!-- Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon total">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-number" id="stat-total">0</div>
+                            <div class="stat-label">Всего ключей</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon active">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-number" id="stat-active">0</div>
+                            <div class="stat-label">Активные</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon banned">
+                            <i class="fas fa-ban"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-number" id="stat-banned">0</div>
+                            <div class="stat-label">Забанены</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon locked">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-number" id="stat-locked">0</div>
+                            <div class="stat-label">HWID locked</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Key Generation -->
+                <div class="card">
+                    <h2><i class="fas fa-plus-circle"></i> Создать ключ</h2>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="duration">Длительность</label>
+                            <select id="duration" class="form-select">
+                                <option value="1">1 день</option>
+                                <option value="7">7 дней</option>
+                                <option value="30">30 дней</option>
+                                <option value="365">1 год</option>
+                                <option value="custom">Произвольная</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="custom-days-container" style="display: none;">
+                            <label for="custom-days">Количество дней</label>
+                            <input type="number" id="custom-days" class="form-input" min="1" value="30">
+                        </div>
+                        <div class="form-group">
+                            <label for="key-note">Примечание (опционально)</label>
+                            <input type="text" id="key-note" class="form-input" placeholder="Описание ключа...">
+                        </div>
+                    </div>
+                    <button id="generate-key" class="btn btn-primary">
+                        <i class="fas fa-bolt"></i> Сгенерировать ключ
+                    </button>
+                </div>
+
+                <!-- Generated Key -->
+                <div class="card" id="generated-key-section" style="display: none;">
+                    <h2><i class="fas fa-key"></i> Сгенерированный ключ</h2>
+                    <div class="key-display">
+                        <input id="generated-key" readonly class="key-input">
+                        <button id="copy-key" class="btn btn-success">
+                            <i class="fas fa-copy"></i> Копировать
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Keys List -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-list"></i> Ключи приложения</h2>
+                        <div class="filters">
+                            <select id="filter-status" class="form-select">
+                                <option value="all">Все ключи</option>
+                                <option value="active">Активные</option>
+                                <option value="expired">Истекшие</option>
+                                <option value="banned">Забаненные</option>
+                            </select>
+                            <button id="refresh-keys" class="btn btn-secondary">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="keys-table">
+                            <thead>
+                                <tr>
+                                    <th>Ключ</th>
+                                    <th>Создан</th>
+                                    <th>Истекает</th>
+                                    <th>Осталось</th>
+                                    <th>HWID</th>
+                                    <th>Статус</th>
+                                    <th>Примечание</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="keys-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Validation Tab -->
+        <div class="tab-content" id="validation-tab">
+            <div class="card">
+                <h2><i class="fas fa-search"></i> Проверка ключа</h2>
+                <div class="form-group">
+                    <label for="validation-key">Ключ</label>
+                    <input type="text" id="validation-key" class="form-input" placeholder="Введите ключ для проверки...">
+                </div>
+                <div class="form-group">
+                    <label for="validation-hwid">HWID</label>
+                    <input type="text" id="validation-hwid" class="form-input" placeholder="Введите HWID для проверки...">
+                </div>
+                <button id="validate-key" class="btn btn-primary">
+                    <i class="fas fa-check-circle"></i> Проверить ключ
+                </button>
+                
+                <div id="validation-result" class="validation-result" style="display: none;">
+                    <h3>Результат проверки:</h3>
+                    <pre id="validation-output"></pre>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-code"></i> Интеграция</h2>
+                <div class="integration-example">
+                    <h4>Пример кода для проверки ключа:</h4>
+                    <pre><code>// Используйте eclipse.cpp для проверки ключей
+// Вам понадобятся:
+// - Owner ID вашего приложения
+// - Secret Key
+// - Ключ пользователя
+// - HWID пользователя
+
+// Пример вызова:
+bool isValid = Eclipse::ValidateKey(
+    "YOUR_OWNER_ID",
+    "YOUR_SECRET_KEY", 
+    "USER_KEY",
+    "USER_HWID"
+);</code></pre>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Modal for Note Editing -->
-    <div id="note-modal" class="modal">
+    <!-- Modals -->
+    <div id="app-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Редактировать примечание</h3>
+                <h3>Данные приложения</h3>
                 <span class="close">&times;</span>
             </div>
             <div class="modal-body">
-                <input type="text" id="edit-note-input" class="form-input" placeholder="Введите примечание...">
-                <input type="hidden" id="edit-note-key">
-            </div>
-            <div class="modal-footer">
-                <button id="save-note" class="btn btn-primary">Сохранить</button>
-                <button id="cancel-note" class="btn btn-secondary">Отмена</button>
+                <div class="credentials">
+                    <div class="credential-item">
+                        <label>Owner ID:</label>
+                        <code id="modal-owner-id"></code>
+                    </div>
+                    <div class="credential-item">
+                        <label>Secret Key:</label>
+                        <code id="modal-secret-key"></code>
+                    </div>
+                </div>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Сохраните Secret Key! Он больше не будет показан.
+                </div>
             </div>
         </div>
     </div>
