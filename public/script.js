@@ -7,7 +7,7 @@ class EclipsePanel {
 
     async init() {
         this.initEventListeners();
-        this.loadApps();
+        await this.loadApps();
         this.showTab('apps');
     }
 
@@ -72,7 +72,7 @@ class EclipsePanel {
     async api(endpoint, options = {}) {
         const url = `/api${endpoint}`;
         const config = {
-            method: 'GET',
+            method: options.method || 'GET',
             headers: {
                 'Content-Type': 'application/json',
                 ...options.headers
@@ -85,11 +85,14 @@ class EclipsePanel {
         }
 
         try {
+            console.log('Making API request:', url, config);
             const response = await fetch(url, config);
-            return await response.json();
+            const result = await response.json();
+            console.log('API response:', result);
+            return result;
         } catch (error) {
-            this.showToast('Ошибка соединения', 'error');
             console.error('API Error:', error);
+            this.showToast('Ошибка соединения', 'error');
             return { success: false, error: 'Connection failed' };
         }
     }
@@ -112,6 +115,8 @@ class EclipsePanel {
                 const option = document.createElement('option');
                 option.value = app.id;
                 option.textContent = app.name;
+                option.setAttribute('data-owner-id', app.ownerId);
+                option.setAttribute('data-secret-key', app.secretKey);
                 select.appendChild(option);
             });
         }
@@ -188,8 +193,8 @@ class EclipsePanel {
         if (result.success) {
             this.showAppCredentialsModal(result.app);
             nameInput.value = '';
-            this.loadApps();
-            this.loadAppsForSelect();
+            await this.loadApps();
+            await this.loadAppsForSelect();
         } else {
             this.showToast(result.error, 'error');
         }
@@ -223,8 +228,8 @@ class EclipsePanel {
 
         if (result.success) {
             this.showToast('Приложение удалено', 'success');
-            this.loadApps();
-            this.loadAppsForSelect();
+            await this.loadApps();
+            await this.loadAppsForSelect();
             
             if (this.currentApp && this.currentApp.id === appId) {
                 this.currentApp = null;
@@ -236,28 +241,47 @@ class EclipsePanel {
     }
 
     async selectApp(appId) {
-        const app = this.apps.find(a => a.id === appId);
-        if (!app) {
+        const select = document.getElementById('app-select');
+        const selectedOption = select.options[select.selectedIndex];
+        
+        if (!appId) {
             this.currentApp = null;
             document.getElementById('app-actions').style.display = 'none';
+            document.getElementById('app-credentials-display').style.display = 'none';
             return;
         }
 
-        this.currentApp = app;
+        // Находим приложение в списке
+        const app = this.apps.find(a => a.id === appId);
+        if (!app) {
+            this.showToast('Приложение не найдено', 'error');
+            return;
+        }
+
+        this.currentApp = {
+            id: app.id,
+            name: app.name,
+            ownerId: app.ownerId,
+            secretKey: selectedOption.getAttribute('data-secret-key')
+        };
+        
+        console.log('Selected app:', this.currentApp);
         
         // Show app credentials
-        document.getElementById('current-owner-id').textContent = app.ownerId;
+        document.getElementById('current-owner-id').textContent = this.currentApp.ownerId;
         document.getElementById('current-secret-key').textContent = '••••••••';
         document.getElementById('app-credentials-display').style.display = 'block';
         document.getElementById('app-actions').style.display = 'block';
 
         // Load stats and keys
-        this.loadAppStats();
-        this.refreshKeys();
+        await this.loadAppStats();
+        await this.refreshKeys();
     }
 
     async loadAppStats() {
         if (!this.currentApp) return;
+
+        console.log('Loading stats for app:', this.currentApp.name);
 
         const stats = await this.api('/stats', {
             headers: {
@@ -265,6 +289,8 @@ class EclipsePanel {
                 'X-Secret-Key': this.currentApp.secretKey
             }
         });
+
+        console.log('Stats response:', stats);
 
         if (stats) {
             document.getElementById('stat-total').textContent = stats.total;
@@ -299,6 +325,11 @@ class EclipsePanel {
         const btn = document.getElementById('generate-key');
         btn.classList.add('loading');
 
+        console.log('Generating key with credentials:', {
+            ownerId: this.currentApp.ownerId,
+            secretKey: this.currentApp.secretKey ? '***' : 'missing'
+        });
+
         const result = await this.api('/keys/generate', {
             method: 'POST',
             headers: {
@@ -315,10 +346,10 @@ class EclipsePanel {
             document.getElementById('generated-key-section').style.display = 'block';
             document.getElementById('key-note').value = '';
             this.showToast('Ключ создан!', 'success');
-            this.refreshKeys();
-            this.loadAppStats();
+            await this.refreshKeys();
+            await this.loadAppStats();
         } else {
-            this.showToast(result.error, 'error');
+            this.showToast(result.error || 'Ошибка создания ключа', 'error');
         }
     }
 
@@ -444,7 +475,6 @@ class EclipsePanel {
         }
 
         // For validation, we need to use a specific app's credentials
-        // This is just a demo - in real implementation you'd select which app to validate against
         if (this.apps.length === 0) {
             this.showToast('Создайте приложение для проверки', 'error');
             return;
